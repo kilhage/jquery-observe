@@ -7,7 +7,9 @@
  * Last Update: 2011-03-22
  * Version x
  *--------------------------------------------*/
-(function($){
+(function($, undefined){
+
+var slice = Array.prototype.slice;
 
 $.fn.extend({
     
@@ -22,7 +24,7 @@ $.fn.extend({
         if ( typeof callback === "string" ) {
             var action = callback;
             callback = function() {
-                return $(this).trigger(action, arguments);
+                return $(this).trigger(action, slice.call(arguments, 1));
             };
         }
         
@@ -43,19 +45,29 @@ $.fn.extend({
 $.extend({
     
     observe: function(object, property, interval, callback, strict) {
-        return $.observer.init(object).add(property, interval, callback, strict);
+        if ( ! $.observer.observable(object) ) return undefined;
+
+        if ( ! callback ) {
+            callback = interval;
+            interval = property;
+            property = $.observer.DEFAULT_PROPERTY;
+        }
+
+        var observer = $.observer.init(object);
+
+        if ( ! $.observer.isObserver(observer) ) return undefined;
+
+        return observer.add(property, interval, callback, strict);
     },
     
     unobserve: function(object, property) {
+        if ( ! $.observer.observable(object) ) return;
         
         var observer = $.observer.get(object);
 
-        if ( ! (observer instanceof $.observer) ) return;
+        if ( ! $.observer.isObserver(observer) ) return;
 
         observer.clear(property);
-        observer = null;
-
-        $.removeData(object, $.observer.data_name);
     },
     
     observer: function(element) {
@@ -73,71 +85,96 @@ $.extend($.observer, {
     DEFAULT_PROPERTY: "value",
     
     init: function(object) {
+        if ( ! $.observer.observable(object) ) return undefined;
+
         var observer = $.observer.get(object);
 
-        if ( ! (observer instanceof $.observer) ) {
+        if ( ! $.observer.isObserver(observer) ) {
             observer = $.data(object, $.observer.data_name, new $.observer(object));
         }
         
         return observer;
     },
     
-    get: function(object){
-        return $.data(object, $.observer.data_name);
+    get: function(object) {
+        return $.observer.observable(object) ? 
+            ($.observer.isObserver(object) ? object : $.data(object, $.observer.data_name)) :
+            undefined;
     },
-    
+
+    isProperty: function(prop) {
+        return prop instanceof $.observer.property;
+    },
+
+    isObserver: function(prop) {
+        return prop instanceof $.observer;
+    },
+
+    observable: function(prop) {
+        var typo = typeof prop;
+        return prop && (typo === "object" || typo === "function");
+    },
+
     property: function($elem, property, interval, callback, observer, strict) {
         var self = this;
-        this.event_name += property;
-        this.observer  = observer;
-        this.property  = property;
-        this.interval  = getInterval(interval);
-        this.$elem     = $elem;
-        this.elem      = $elem[0];
-        this.prevVal   = this.getValue();
-        this.add(callback);
-        this.timer = setInterval(function() {self.check();}, this.interval);
-        this.changed = strict === true ? strictChanged : changed;
+        self.event_name += property;
+        self.observer  = observer;
+        self.property  = property;
+        self.interval  = getInterval(interval);
+        self.$elem     = $elem;
+        self.elem      = $elem[0];
+        self.prevVal   = self.getValue();
+        self.bind(callback);
+        self.changed = strict === true ? strictChanged : changed;
+        self.timer = setInterval(function() {self.check();}, self.interval);
     },
     
     prototype: {
     
         add: function(property, interval, callback, strict) {
-            var timers = this.timers[property];
+            var self = this, timers = self.timers[property];
 
             if ( ! timers ) {
-                timers = this.timers[property] = {};
-            } else if ( timers[interval] instanceof $.observer.property ) {
-                timers[interval].add(callback);
-                return this;
+                timers = self.timers[property] = {};
+            } else if ( $.observer.isProperty(timers[interval]) ) {
+                timers[interval].bind(callback);
+                return self;
             }
 
-            timers[interval] = new $.observer.property(this.$elem, property, interval, callback, this, strict);
+            timers[interval] = new $.observer.property(self.$elem, property, interval, callback, self, strict);
 
+            return self;
+        },
+
+        bind: function(property, callback) {
+            var timers = this.timers[property], interval;
+            if ( timers ) {
+                for( interval in timers ) {
+                    timers[interval].bind(callback);
+                }
+            }
             return this;
         },
 
         clear: function(property) {
-            if ( typeof property == "string" ) {
-                this.clearProperty(property);
+            if ( typeof property === "string" ) {
+                this._clearProperty(property);
             } else {
                 for ( property in this.timers ) {
-                    this.clearProperty(property);
+                    this._clearProperty(property);
                 }
             }
             return this;
         },
 
-        clearProperty: function(property) {
+        _clearProperty: function(property) {
             var timers = this.timers[property], interval;
             if ( timers && timers.hasOwnProperty(property) ) {
                 for ( interval in timers ) {
-                    if ( timers[interval] instanceof $.observer.property ) {
+                    if ( $.observer.isProperty(timers[interval]) ) {
                         timers[interval].clear();
                     }
                 }
-                if ( interval && timers[interval] instanceof $.observer.property )
-                    this.$elem.unbind(timers[interval].event_name);
             }
             return this;
         }
@@ -149,7 +186,6 @@ $.extend($.observer, {
 $.observer.property.prototype = {
     
     i: 0,
-    
     event_name: $.observer.data_name+".",
     
     getValue: function() {
@@ -157,31 +193,34 @@ $.observer.property.prototype = {
     },
     
     check: function() {
-        this.curVal = this.getValue();
-        if ( this.changed() ) {
-            this.i++;
-            this.trigger();
-            this.prevVal = this.curVal;
-            delete this.curVal;
+        var self = this;
+        self.curVal = self.getValue();
+        if ( self.changed() ) {
+            self.i++;
+            self._trigger();
+            self.prevVal = self.curVal;
+            delete self.curVal;
         }
     },
     
-    trigger: function() {
-        this.$elem.trigger(this.event_name, [this.prevVal, this.curVal, this]);
-        return this;
+    _trigger: function() {
+        var self = this;
+        self.$elem.trigger(self.event_name, [self.prevVal, self.curVal, self]);
+        return self;
     },
-    
-    add: function(callback) {
+
+    bind: function(callback) {
         this.$elem.bind(this.event_name, callback);
         return this;
     },
     
     clear: function() {
         clearInterval(this.timer);
+        this.$elem.unbind(this.event_name);
         return this;
     }
     
-}
+};
 
 function getInterval(interval) {
     if ( typeof interval !== "number" ) {
@@ -192,10 +231,10 @@ function getInterval(interval) {
 
 var changed = function() {
     return this.prevVal != this.curVal;
-}
+};
 
 var strictChanged = function() {
     return this.prevVal !== this.curVal;
-}
+};
 
 }(jQuery));
