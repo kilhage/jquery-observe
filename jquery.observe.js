@@ -119,7 +119,7 @@ $.extend($.observer, {
     // The default property name
     DEFAULT_PROPERTY: "value",
     
-    // 
+    // The default interval
     DEFAULT_INTERVAL: 1,
     
     // The event/data-namespace
@@ -225,7 +225,12 @@ $.extend($.observer, {
             $.observer.property.strictChanged : 
             $.observer.property.changed;
         
-        self.timer = setInterval(function() {self.check();}, interval);
+        if ( support.sgett ) {
+            initSGetters(self.elem, property, self);
+        } else {
+            self.timer = setInterval(function() {self.check(self.getValue());}, interval);
+        }
+        
     },
     
     /* ========================== $.observer Instance Methods ========================== */
@@ -331,9 +336,9 @@ $.extend($.observer.property, {
          * 
          * @return void
          */
-        check: function() {
+        check: function(val) {
             var self = this;
-            self.curVal = self.getValue();
+            self.curVal = val;
             if ( self.changed() ) {
                 self.i++;
                 self._trigger();
@@ -371,16 +376,17 @@ $.extend($.observer.property, {
          * @return self
          */
         clear: function() {
+            this.check = $.noop;
             clearInterval(this.timer);
             this.$elem.unbind(this.event_name);
             return this;
         }
 
     }
-    
+
 });
 
-/* ================== Private helpers ================== */
+/* ================================ Private helpers ================================ */
 
 /**
  * Fixes bad input
@@ -411,6 +417,66 @@ function clearProperty(self, property) {
     }
 }
 
+function initSGetters(e, name, self) {
+    var val;
+    self._set = e.__lookupSetter__(name) || $.noop;
+    self._get = e.__lookupGetter__(name) || $.noop;
+
+    e.__defineSetter__(name, function(value) {
+        val = value;
+        self.check(value);
+        return self._set.apply(this, arguments);
+    });
+
+    e.__defineGetter__(name, function() {
+        self._get.apply(this, arguments);
+        return val;
+    });
+}
+
 var slice = Array.prototype.slice;
+
+/* ================================ Support ================================ */
+
+var support = (function() {
+    
+    var s = {
+        sgett: false
+    };
+    
+    $.each({
+        object_sgett: {},
+        element_sgett: document.createElement("input")
+    }, function(name, e) {
+        if ( !e.__lookupSetter__ || !e.__defineGetter__ ) return;
+        
+        var val;
+        try {
+            e.value = "1";
+
+            var set = e.__lookupSetter__("value") || $.noop;
+            var get = e.__lookupGetter__("value") || $.noop;
+
+            e.__defineSetter__("value", function(value){
+                val = value;
+                set.apply(this, arguments);
+            });
+
+            e.__defineGetter__("value", function(){
+                get.apply(this, arguments);
+                return "3";
+            });
+
+            e.value = "2";
+
+            s.sgett = s.sgett && e.value === "3" && val === "2";
+        } catch(e) {
+            s.sgett = false;
+        }
+    });
+    
+    return s;
+    
+}());
 
 }(jQuery));
