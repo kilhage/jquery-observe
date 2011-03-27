@@ -8,8 +8,10 @@ About
 * Version x
 * Author Emil Kilhage
 
-This plugin is inspired by Prototypes timed observer classes and basicly works the same way.
-The difference is that this is easier to use and much more flexible.
+This plugin is used to observe changes in property values in objects and elements.
+
+It takes advantage of ecma script 5's Object.defineProperty or __defineSetter__ 
+whenever any of these are available and falls back at an timed observer(In older browsers like IE6, IE7) that checks if the property has been changed in an interval that you specify.
 
 This can be used to observe changes in any property in any plain-object or html-element really easy.
 
@@ -30,7 +32,7 @@ Html:
 Javascript:
 <pre>
 
-$("#observed_field").observe(0.5, function(event, previous_value, current_value, handler) {
+$("#observed_field").observe(1, function(event, previous_value, current_value, handler) {
     // The context will be the html-element
 });
 
@@ -53,7 +55,7 @@ var callback = function(event, previous_value, current_value, handler) {
     // The context will be the object
 };
 
-$(object).observe("property", 0.5, callback);
+$(object).observe("property", 1, callback);
 
 object.property = 2; // Will trigger the callback
 
@@ -89,7 +91,7 @@ You can also use the $.observe function to achieve the same thing basically.
 
 var object = {};
 
-$.observe(object, "property", 0.5, callback);
+$.observe(object, "property", 1, callback);
 
 object.property = 2; // Will trigger the callback
 

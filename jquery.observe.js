@@ -125,6 +125,11 @@ $.extend($.observer, {
     // The event/data-namespace
     DATA_NAME: "observer",
     
+    modes: {
+        object: "timer",
+        element: "timer"
+    },
+    
     /* ========================== Public Helper Methods ========================== */
     
     /**
@@ -198,7 +203,7 @@ $.extend($.observer, {
      * @return <boolean>
      */
     observable: function(prop) {
-        return !!(prop && (prop.nodeType || $.type(prop) === "object"));
+        return !!(prop && (prop.nodeType || toString.call(prop) === "[object Object]"));
     },
 
     /**
@@ -217,7 +222,6 @@ $.extend($.observer, {
         self.interval  = interval = getInterval(interval);
         self.event_name += property+"."+interval;
         self.$elem     = $elem instanceof $ ? $elem : $($elem);
-        self.$elem     = $elem;
         self.elem      = $elem[0];
         self.prevVal   = self.getValue();
         self.bind(callback);
@@ -225,12 +229,7 @@ $.extend($.observer, {
             $.observer.property.strictChanged : 
             $.observer.property.changed;
         
-        if ( support.sgett ) {
-            initSGetters(self.elem, property, self);
-        } else {
-            self.timer = setInterval(function() {self.check(self.getValue());}, interval);
-        }
-        
+        self.init[getObjectType(self.elem)].call(self);
     },
     
     /* ========================== $.observer Instance Methods ========================== */
@@ -324,6 +323,7 @@ $.extend($.observer.property, {
         i: 0,
         // The event name that is bound to the object
         event_name: $.observer.DATA_NAME+".",
+        timer: 0,
         
         /**
          * @return the value of the property in the object
@@ -417,66 +417,106 @@ function clearProperty(self, property) {
     }
 }
 
-function initSGetters(e, name, self) {
-    var val;
-    self._set = e.__lookupSetter__(name) || $.noop;
-    self._get = e.__lookupGetter__(name) || $.noop;
-
-    e.__defineSetter__(name, function(value) {
-        val = value;
-        self.check(value);
-        return self._set.apply(this, arguments);
-    });
-
-    e.__defineGetter__(name, function() {
-        self._get.apply(this, arguments);
-        return val;
-    });
+function getObjectType(elem) {
+    return elem.nodeType ? "element" : "object";
 }
 
 var slice = Array.prototype.slice;
+var toString = Object.prototype.toString;
 
 /* ================================ Support ================================ */
 
-var support = (function() {
+$.observer.property.prototype.init = (function() {
     
-    var s = {
-        sgett: false
+    var default_init = function() {
+        var self = this;
+        self.timer = setInterval(function() {self.check(self.getValue());}, self.interval);
     };
     
-    $.each({
-        object_sgett: {},
-        element_sgett: document.createElement("input")
-    }, function(name, e) {
-        if ( !e.__lookupSetter__ || !e.__defineGetter__ ) return;
-        
-        var val;
-        try {
-            e.value = "1";
-
-            var set = e.__lookupSetter__("value") || $.noop;
-            var get = e.__lookupGetter__("value") || $.noop;
-
-            e.__defineSetter__("value", function(value){
+    var init = {
+        element: default_init,
+        object: default_init
+    };
+    
+    var test_objects = {
+        object: {},
+        element: document.createElement("input")
+    };
+    
+    var available_inits = {
+        sgett: function() {
+            var val, self = this, elem = self.elem, name = self.property;
+            elem.__defineSetter__(name, function(value) {
                 val = value;
-                set.apply(this, arguments);
+                setTimeout(function() {self.check(value);}, 0);
             });
 
-            e.__defineGetter__("value", function(){
-                get.apply(this, arguments);
-                return "3";
+            elem.__defineGetter__(name, function() {
+                return val;
             });
-
-            e.value = "2";
-
-            s.sgett = s.sgett && e.value === "3" && val === "2";
-        } catch(e) {
-            s.sgett = false;
+        },
+        defprop: function() {
+            var val, self = this;
+            Object.defineProperty(self.elem, self.property, {
+                get: function() {
+                    return val;
+                },
+                set: function(value) {
+                    val = value;
+                    setTimeout(function() {self.check(value);}, 0);
+                }
+            });
         }
+    };
+    
+    var tests = {
+        sgett: function(name, e) {
+            if ( !e.__lookupSetter__ ) return false;
+
+            try {
+                available_inits.sgett.call({
+                    property: "value",
+                    check: function(){},
+                    elem: e
+                });
+                
+                e.value = "3";
+
+                return e.value === "3";
+            } catch(e) {
+                return false;
+            }
+        },
+        defprop: function(name, e) {
+            if ( !Object.defineProperty ) return false;
+
+            try {
+                available_inits.defprop.call({
+                    property: "value",
+                    check: function(){},
+                    elem: e
+                });
+                
+                e.value = "3";
+
+                return e.value === "3";
+            } catch(e) {
+                return false;
+            }
+        }
+    };
+    
+    $.each(tests, function(name, test) {
+        $.each(test_objects, function(n, e) {
+            if ( test(n, e) ) {
+                init[n] = available_inits[name];
+                $.observer.modes[n] = name;
+            }
+        });
     });
     
-    return s;
     
+    return init;
 }());
 
 }(jQuery));

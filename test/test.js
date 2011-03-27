@@ -55,7 +55,7 @@ test("simple plain object", function() {
     
     t.prop = "1";
     
-    window.t = $(t).observe(0.5, function(){ok(true);}).trigger($.observer.data_name+".value").unobserve("value");
+    $(t).observe(0.5, function(){ok(true);}).trigger($.observer.data_name+".value").unobserve("value");
 
 });
 
