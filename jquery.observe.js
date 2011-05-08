@@ -1,11 +1,11 @@
 /*--------------------------------------------*
- * jQuery-observe, Sherlock holmes is watching..
+ * jQuery-observe
  *--------------------------------------------*
  * Author Emil Kilhage
  * MIT Licensed
  *--------------------------------------------*
- * Last Update: 2011-03-22
- * Version x
+ * Last Update: 2011-05-08
+ * Version 0.7
  *--------------------------------------------*/
 (function($, undefined) {
 
