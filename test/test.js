@@ -130,3 +130,27 @@ test("$.observer.observable", function(){
     });
     
 });
+
+test("s", function(){
+    
+    stop()
+
+    var object = {
+        CONSTANT: 1
+        
+    };
+    
+    $(object).observe("CONSTANT", 0.1, function(event, previous_value, current_value, handler){
+        object.CONSTANT = previous_value;
+    });
+    
+    object.CONSTANT = 2;
+    
+    setTimeout(function(){
+        
+        ok(object.CONSTANT === 1);
+        start();
+        
+    }, 3);
+    
+});
