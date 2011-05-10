@@ -4,519 +4,241 @@
  * Author Emil Kilhage
  * MIT Licensed
  *--------------------------------------------*
- * Last Update: 2011-05-08
- * Version 0.7
+ * Last Update: 2011-05-11
+ * Version 0.8
  *--------------------------------------------*/
-(function($, undefined) {
+/*jslint browser: true*/
+/*global jQuery */
+(function ($, undefined) {
+    "use strict";
+    
+    var INTERVAL = 0.3,
+        DATA_NAME = "__observer",
+        EVENT_NAME = "observe",
+        DEFAULT_PROPERTY = "value",
+        initializeObserver,
+        types = ["__defineGetter__", "defineProperty", "timer"];
+    
+    function Observer(object) {
+        var properties = {},
+            // jslint complains that observer isn't 
+            // defined without this line, stupid...
+            observer;
 
-$.fn.extend({
-    
-    /**
-     * Initalizes a observer
-     * 
-     * @param <string> property
-     * @param <number> interval
-     * @param <function> callback
-     * @param <boolean> strict
-     * @return <jQuery instance>
-     */
-    observe: function(property, interval, callback, strict) {
-        return this.each(function() {
-            $.observe(this, property, interval, callback, strict);
-        });
-    },
-    
-    /**
-     * 
-     * @param <string> property
-     * @return <jQuery instance>
-     */
-    unobserve: function(property) {
-        return this.each(function() {
-            $.unobserve(this, property);
-        });
-    }
-    
-});
+        observer = {
+            add: function (property, fn) {
+                if (!observer.has(property)) {
+                    properties[property] = initializeObserver(object, property);
+                }
 
-$.extend({
+                if (fn) {
+                    $(object).bind(EVENT_NAME + "." + property, fn);
+                }
 
-    /**
-     * 
-     * @param <object> object: the object that should be observed
-     * @param <string> property: name of the property
-     * @param <number> interval: the interval
-     * @param <function> callback: callback function
-     * @param <boolean> strict
-     * @return <jQuery.observer instance> if the object is observable, else undefined
-     */
-    observe: function(object, property, interval, callback, strict) {
-        
-        if ( ! callback ) {
-            callback = interval;
-            interval = property;
-            property = $.observer.DEFAULT_PROPERTY;
-        }
-        
-        if ( ! callback ) {
-            callback = interval;
-            interval = $.observer.DEFAULT_INTERVAL;
-        }
-        
-        if ( typeof callback === "string" ) {
-            var action = callback;
-            callback = function() {
-                return $(this).trigger(action, slice.call(arguments, 1));
-            };
-        }
-        
-        if ( ! callback ) return undefined;
+                return observer;
+            },
+            remove: function (property, fn) {
+                if (observer.has(property)) {
+                    properties[property].remove();
+                    delete properties[property];
+                }
 
-        var observer = $.observer.init(object);
+                if (fn) {
+                    $(object).unbind(EVENT_NAME + "." + property, fn);
+                }
 
-        if ( ! $.observer.isObserver(observer) ) return undefined;
+                return observer;
+            },
+            has: function (property) {
+                return properties.hasOwnProperty(property);
+            }
+        };
 
-        return observer.add(property, interval, callback, strict);
-    },
-    
-    /**
-     * 
-     * @param <object> object
-     * @param <string> property
-     * @return void
-     */
-    unobserve: function(object, property) {
-        var observer = $.observer.get(object);
-
-        if ( ! $.observer.isObserver(observer) ) return;
-        
-        observer.clear(property);
-    },
-    
-    /**
-     * Constructor for the Observer object
-     * This is bound to all obejcts that is 
-     * observed and will contins all timed property observers
-     *
-     * @param <object> element: an instance of jQuery or an object
-     */
-    observer: function(element) {
-        var self = this;
-        self.$elem = element instanceof $ ? element : $(element);
-        self.elem = self.$elem[0];
-        self.timers = {};
-    }
-    
-});
-
-$.extend($.observer, {
-    
-    /* ============== Constants, you could change these if you like ============== */
-    
-    // The lowest interval that could be observed
-    MIN: 0.5,
-    
-    // The default property name
-    DEFAULT_PROPERTY: "value",
-    
-    // The default interval
-    DEFAULT_INTERVAL: 1,
-    
-    // The event/data-namespace
-    DATA_NAME: "observer",
-    
-    modes: {
-        object: "timer",
-        element: "timer"
-    },
-    
-    /* ========================== Public Helper Methods ========================== */
-    
-    /**
-     * Initalizes the $.observer if it already isn't bound to the object
-     *
-     * @param <object> object
-     * @return <jQuery.observer instance> if the object is observable, else undefined.
-     */
-    init: function(object) {
-        if ( ! $.observer.observable(object) ) return undefined;
-
-        var observer = $.observer.get(object);
-        
-        if ( ! $.observer.isObserver(observer) ) {
-            observer = $.data(object, $.observer.DATA_NAME, new $.observer(object));
-        }
-        
         return observer;
-    },
-    
-    /**
-     * Returns the instanceof $.observer if it where somehow bound to the object.
-     * 
-     * If a string is given, it will be treated as a selector.
-     * 
-     * if a plain object, dom node or an instance of jQuery is given
-     * The observer instance will be extracted with the $.data function
-     * 
-     * If something that isn't observable is given, 
-     * or if the instance isn't found by the $.data function, undefined will be returned
-     * 
-     * @param <mixed> object
-     * @return <jQuery.observer instance> if success, else <undefined>.
-     */
-    get: function(object) {
-        return typeof object === "string" ? 
-            $.observer.get($(object)) : 
-                $.observer.observable(object) ? 
-                ($.observer.isObserver(object) ? 
-                    object : 
-                    $.data(object instanceof $ ? object[0] : object, $.observer.DATA_NAME)) :
-            undefined;
-    },
-
-    /**
-     * Checks if given property is an instance of the $.observer.property object
-     * 
-     * @param prop
-     * @return <boolean>
-     */
-    isProperty: function(prop) {
-        return prop instanceof $.observer.property;
-    },
-
-    /**
-     * Checks if given property is an instance of the $.observer object
-     * 
-     * @param prop
-     * @return <boolean>
-     */
-    isObserver: function(prop) {
-        return prop instanceof $.observer;
-    },
-
-    /**
-     * Checks if given property is observable
-     * 
-     * Allows plain objects and dom-nodes
-     * 
-     * @param prop
-     * @return <boolean>
-     */
-    observable: function(prop) {
-        return !!(prop && (prop.nodeType || toString.call(prop) === "[object Object]"));
-    },
-
-    /**
-     * Constructor for the $.observer.property object
-     * 
-     * @param <object> $elem
-     * @param <string> property
-     * @param <number> interval
-     * @param <function> callback
-     * @param <boolean> strict
-     */
-    property: function($elem, property, interval, callback, observer, strict) {
-        var self = this;
-        self.observer  = observer;
-        self.property  = property;
-        self.interval  = interval = getInterval(interval);
-        self.event_name += property+"."+interval;
-        self.$elem     = $elem instanceof $ ? $elem : $($elem);
-        self.elem      = $elem[0];
-        self.prevVal   = self.getValue();
-        self.bind(callback);
-        self.changed = strict === true ? 
-            $.observer.property.strictChanged : 
-            $.observer.property.changed;
-        
-        self.init[getObjectType(self.elem)].call(self);
-    },
-    
-    /* ========================== $.observer Instance Methods ========================== */
-    
-    prototype: {
-        
-        /**
-         * Initalizes a new timed property observer to the object
-         * if an observer with the same interval hasn't been initalized.
-         * If thats the case, the callback will just be bound to the event
-         *
-         * @param <string> property
-         * @param <number> interval
-         * @param <function> callback
-         * @param <boolean> strict
-         * @return self
-         */
-        add: function(property, interval, callback, strict) {
-            var self = this, timers = self.timers[property];
-
-            if ( ! timers ) {
-                timers = self.timers[property] = {};
-            } else if ( $.observer.isProperty(timers[interval]) ) {
-                timers[interval].bind(callback);
-                return self;
-            }
-
-            timers[interval] = new $.observer.property(self.$elem, property, interval, callback, self, strict);
-
-            return self;
-        },
-        
-        /**
-         * Binds an callback to an property observer
-         * 
-         * @param <string> property: name of the property that you whant to bind the callback to
-         * @param <function> callback: callback function
-         * @return self
-         */
-        bind: function(property, callback) {
-            var timers = this.timers[property], interval;
-            if ( timers ) {
-                for( interval in timers ) {
-                    timers[interval].bind(callback);
-                }
-            }
-            return this;
-        },
-
-        /**
-         * Destructs the timed property observers in this object
-         * if property is passed, only this will be destructed
-         * otherwise, everything will be destructed
-         * 
-         * @param <string> property
-         * @return self
-         */
-        clear: function(property) {
-            if ( typeof property === "string" ) {
-                clearProperty(this, property);
-            } else {
-                for ( property in this.timers ) {
-                    clearProperty(this, property);
-                }
-            }
-            return this;
-        }
-
     }
     
-});
-
-$.extend($.observer.property, {
-    
-    // One of these will be set on the $.observer.property instance when it get initalized
-    // depending on if the strict param is set to true or not.
-    
-    changed: function() {
-        return this.prevVal != this.curVal;
-    },
-
-    strictChanged: function() {
-        return this.prevVal !== this.curVal;
-    },
-    
-    /* =========== $.observer.property Instance Methods =========== */
-    
-    prototype: {
-        
-        // Number of times the property have changed
-        i: 0,
-        // The event name that is bound to the object
-        event_name: $.observer.DATA_NAME+".",
-        timer: 0,
-        
-        /**
-         * @return the value of the property in the object
-         */
-        getValue: function() {
-            return this.elem[this.property];
-        },
-        
-        /**
-         * 
-         * @return void
-         */
-        check: function(val) {
-            var self = this;
-            self.curVal = val;
-            if ( self.changed() ) {
-                self.i++;
-                self._trigger();
-                self.prevVal = self.curVal;
-                delete self.curVal;
-            }
-        },
-        
-        /**
-         * Triggers the property observe event
-         * 
-         * @return self
-         */
-        _trigger: function() {
-            var self = this;
-            self.$elem.trigger(self.event_name, [self.prevVal, self.curVal, self]);
-            return self;
-        },
-        
-        /**
-         * Binds an callback to the observe event
-         * 
-         * @param <function> callback
-         * @return self
-         */
-        bind: function(callback) {
-            this.$elem.bind(this.event_name, callback);
-            return this;
-        },
-        
-        /**
-         * Unbinds the event to the element and stops 
-         * the timed observation for the property in the object
-         * 
-         * @return self
-         */
-        clear: function() {
-            this.check = $.noop;
-            clearInterval(this.timer);
-            this.$elem.unbind(this.event_name);
-            return this;
-        }
-
+    function get(elem) {
+        return $.data(elem, DATA_NAME);
     }
-
-});
-
-/* ================================ Private helpers ================================ */
-
-/**
- * Fixes bad input
- * 
- * @param <mixed> interval
- * @return <number float>
- */
-function getInterval(interval) {
-    if ( typeof interval !== "number" ) {
-        interval = parseFloat(interval);
+    
+    function trigger(object, property, prev_val) {
+        setTimeout(function () {
+            $(object).trigger(EVENT_NAME + "." + property, [prev_val]);
+        }, 0);
     }
-    return interval != interval || interval < $.observer.MIN ? $.observer.MIN : interval;
-}
-
-/**
- * 
- * @param <jQuery.observer instance> self
- * @param <string> property
- * @return void
- */
-function clearProperty(self, property) {
-    var timers = self.timers[property], interval;
-    if ( timers ) {
-        for ( interval in timers ) {
-            timers[interval].clear();
+    
+    $.fn.observe = function (property, fn) {
+        if (!fn) {
+            fn = property;
+            property = DEFAULT_PROPERTY;
         }
-        delete self.timers[property];
-    }
-}
-
-function getObjectType(elem) {
-    return elem.nodeType ? "element" : "object";
-}
-
-var slice = Array.prototype.slice;
-var toString = Object.prototype.toString;
-
-/* ================================ Support ================================ */
-
-$.observer.property.prototype.init = (function() {
-    
-    var default_init = function() {
-        var self = this;
-        self.timer = setInterval(function() {self.check(self.getValue());}, self.interval);
+        return this.bind(EVENT_NAME + "." + property, fn);
+    };
+        
+    $.fn.unobserve = function (property, fn) {
+        property = property || DEFAULT_PROPERTY;
+        return this.unbind(EVENT_NAME + "." + property, fn);
     };
     
-    var init = {
-        element: default_init,
-        object: default_init
-    };
-    
-    var test_objects = {
-        object: {},
-        element: document.createElement("input")
-    };
-    
-    var available_inits = {
-        sgett: function() {
-            var val, self = this, elem = self.elem, name = self.property;
-            elem.__defineSetter__(name, function(value) {
-                val = value;
-                setTimeout(function() {self.check(value);}, 0);
-            });
+    $.each(["unobserve", "observe"], function (i, name) {
+        $[name] = function (object, property, fn) {
+            $(object)[name](property, fn);
+            return get(object);
+        };
+    });
 
-            elem.__defineGetter__(name, function() {
-                return val;
-            });
-        },
-        defprop: function() {
-            var val, self = this;
-            Object.defineProperty(self.elem, self.property, {
-                get: function() {
-                    return val;
-                },
-                set: function(value) {
-                    val = value;
-                    setTimeout(function() {self.check(value);}, 0);
-                }
-            });
+    $.Observer = Observer;
+    
+    Observer.get = get;
+    Observer.timer = Observer.using = undefined;
+    Observer.types = $.merge([], types);
+    Observer.INTERVAL = INTERVAL;
+    Observer.changeDefaultProperty = function (prop) {
+        DEFAULT_PROPERTY = prop;
+    };
+    
+    $.event.special.observe = {
+        setup: function () {
+            $.data(this, DATA_NAME, Observer(this));
+        },        
+        teardown: function () {
+            $.removeData(this, DATA_NAME);
         }
     };
     
-    var tests = {
-        sgett: function(name, e) {
-            if ( !e.__lookupSetter__ ) return false;
-
-            try {
-                available_inits.sgett.call({
-                    property: "value",
-                    check: function(){},
-                    elem: e
-                });
-                
-                e.value = "3";
-
-                return e.value === "3";
-            } catch(e) {
-                return false;
+    $.each({remove: "unbind", add: "bind"}, function (special, action) {
+        $.event.special.observe[special] = function (info) {
+            var observer = $.data(this, DATA_NAME), 
+                property = info.namespace;
+            
+            if (!property) {
+                property = DEFAULT_PROPERTY;
+                $(this)[action](EVENT_NAME + "." + DEFAULT_PROPERTY, info.handler);
             }
-        },
-        defprop: function(name, e) {
-            if ( !Object.defineProperty ) return false;
-
-            try {
-                available_inits.defprop.call({
-                    property: "value",
-                    check: function(){},
-                    elem: e
-                });
-                
-                e.value = "3";
-
-                return e.value === "3";
-            } catch(e) {
-                return false;
+            
+            if (observer) {
+                observer[special](property);
             }
-        }
-    };
-    
-    $.each(tests, function(name, test) {
-        $.each(test_objects, function(n, e) {
-            if ( test(n, e) ) {
-                init[n] = available_inits[name];
-                $.observer.modes[n] = name;
-            }
-        });
+        };
     });
     
-    
-    return init;
-}());
+    initializeObserver = (function () {
+        var defineProperty = $.isFunction(Object.defineProperty), o = {},
+            defineGetter = $.isFunction(o.__defineGetter__),
+            objects = [],
+            OBJECT = 0,
+            PROPERTIES = 1,
+            NUMBER_OF_PROPERTIES = 2;
+        
+        function start() {
+            Observer.timer = setInterval(function () {
+                var l = objects.length, i = 0, properties, property;
+                for (; i < l; i++) {
+                    properties = objects[i][PROPERTIES];
+                    for (property in properties) {
+                        properties[property]();
+                    }
+                }
+            }, INTERVAL);
+        }
+
+        function destroy() {
+            clearInterval(Observer.timer);
+            Observer.timer = undefined;
+        }
+        
+        if (defineProperty || defineGetter) {
+            Observer.using = types[defineProperty ? 1 : 0];
+            return function (object, property) {
+                var value = object[property],
+                    disabled = false;
+                
+                function set(val) {
+                    var prev_val = value;
+                    value = val;
+                    if (disabled === false && prev_val != val) {
+                        trigger(object, property, prev_val);
+                    }
+                }
+                
+                function get() {
+                    return value;
+                }
+                
+                if (defineGetter) {
+                    object.__defineSetter__(property, set);
+                    object.__defineGetter__(property, get);
+                } else {
+                    Object.defineProperty(object, property, {set: set, get: get});
+                }
+                
+                return {
+                    remove: function () {
+                        disabled = true;
+                    }
+                };
+            };
+        } else {
+            Observer.using = types[2];
+                
+            return function (object, property) {
+                var i = objects.length,
+                    properties,
+                    value = object[property],
+                    index = i, 
+                    row;
+
+                while (i--) {
+                    row = objects[i];
+                    if (row[OBJECT] === object) {
+                        properties = row[PROPERTIES];
+                        index = i - 1;
+                        break;
+                    }
+                }
+
+                if (properties === undefined) {
+                    properties = {};
+                    row = [object, properties, 0];
+                    objects.push(row);
+                }
+
+                row[NUMBER_OF_PROPERTIES]++;
+
+                properties[property] = function () {
+                    if (object[property] != value) {
+                        var prev_val = value;
+                        value = object[property];
+                        trigger(object, property, prev_val);
+                    }
+                };
+
+                // Start the timer that checks if any properties are changed
+                if (Observer.timer === undefined) {
+                    start();
+                }
+
+                return {
+                    remove: function () {
+                        if (properties.hasOwnProperty(property)) {
+                            // Remove the property from the watch list
+                            delete properties[property];
+                            // If the object doesn't have any properties that
+                            // are observed, we don't need to 
+                            // store a reference to it any more
+                            if (--row[NUMBER_OF_PROPERTIES] === 0) {
+                                objects.splice(index);
+                                // If we aren't observing any objects
+                                // We can destroy the timer
+                                if (objects.length === 0) {
+                                    destroy();
+                                }
+                            }
+                        }
+                    }
+                };
+            };
+        }
+    }());
 
 }(jQuery));

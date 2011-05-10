@@ -9,7 +9,7 @@
 	<script type="text/javascript" src="test.js"></script>
 </head>
 <body>
-	<h1 id="qunit-header">QUnit Test Suite - jQuery.Class</h1>
+	<h1 id="qunit-header">QUnit Test Suite - jQuery.Observer</h1>
 	<h2 id="qunit-banner"></h2>
 	<div id="qunit-testrunner-toolbar"></div>
 	<h2 id="qunit-userAgent"></h2>

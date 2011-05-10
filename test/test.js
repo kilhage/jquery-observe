@@ -1,13 +1,39 @@
 
 var log = function() {console.log.apply(console, arguments);};
 
-module("$.observe");
+$(function(){
+    $("#qunit-header").append(" With" + (!$.Observer.usingTimer ? "out" : "") + " timer");
+    if (!$.Observer.usingTimer) {
+        $("#qunit-header").append(", unsing: " + $.Observer.using)
+    }
+});
+
+test("Binding an observer directly using jQuery's event interface", function () {
+   
+   stop();
+   
+   if ($.Observer.usingTimer) {
+       ok($.Observer.timer != undefined);
+   }
+   
+   $("#input1").val("0").bind("observe", function (event, prev_val) {
+       ok(true);
+       equal(prev_val, "0");
+       $(this).unbind("observe");
+       if ($.Observer.usingTimer) {
+           equal($.Observer.timer, undefined);
+       }
+       start();
+       
+   }).val("1");
+   
+});
 
 test("simple input", function(){
     
     stop();
   
-    var input = $("<input type='text' />").observe("0.4", function() {
+    var input = $("<input type='text' />").observe(function() {
         ok(true);
         start();
         
@@ -27,7 +53,7 @@ test("simple plain object, std prop", function() {
     
     var t = {};
     
-    $.observe(t, 0.7, function(){
+    $.observe(t, function(){
         ok(true);
         start();
     });
@@ -36,7 +62,7 @@ test("simple plain object, std prop", function() {
         
         t.value = "1";
         
-    }, 1);
+    }, 3);
 
 });
 
@@ -46,7 +72,7 @@ test("simple plain object", function() {
     
     var t = {};
     
-    $.observe(t, "prop", 0.7, function(){
+    $.observe(t, "prop", function(){
         ok(true);
         start();
     
@@ -55,7 +81,9 @@ test("simple plain object", function() {
     
     t.prop = "1";
     
-    $(t).observe(0.5, function(){ok(true);}).trigger($.observer.data_name+".value").unobserve("value");
+    $(t).observe(function(){
+        ok(true);
+    }).trigger("observer.value").unobserve("value");
 
 });
 
@@ -65,8 +93,8 @@ test("simple", function(){
     
     $(o).observe(function() {
         ok(true);
-        start();
         $.unobserve(o);
+        start();
     });
     
     o.value = "dew"
@@ -81,7 +109,7 @@ test("all", function(){
     
     var a = {};
     
-    $.observe(a, 0.6, function() {
+    $.observe(a, function() {
         ok(false, "unable to onobserve");
     });
     
@@ -102,55 +130,17 @@ test("single", function(){
     
     var a = {};
     
-    $.observe(a, 0.6, function() {
+    $.observe(a, "value", function() {
         ok(false, "unable to onobserve");
     });
     
-    setTimeout(function(){
+    $.unobserve(a, "value");
+    
+    setTimeout(function () {
         
         a.value = "1sss";
         start();
         
     }, 3);
-    
-    $.unobserve(a, "value");
 
-});
-
-module("internal");
-
-test("$.observer.observable", function(){
-    
-    $.each([null, function(){}, undefined, /cdscds/, "", "fsdcds", [], 1, 0.2, true, false, NaN], function(i, p){
-        equal($.observer.observable(p), false, $.type(p)+"::"+String(p)+":: should not be observable" );
-    });
-    
-    $.each([{}, document.createElement("a")], function(i, p){
-        equal($.observer.observable(p), true, $.type(p)+"::"+String(p)+":: should be observable" );
-    });
-    
-});
-
-test("s", function(){
-    
-    stop()
-
-    var object = {
-        CONSTANT: 1
-        
-    };
-    
-    $(object).observe("CONSTANT", 0.1, function(event, previous_value, current_value, handler){
-        object.CONSTANT = previous_value;
-    });
-    
-    object.CONSTANT = 2;
-    
-    setTimeout(function(){
-        
-        ok(object.CONSTANT === 1);
-        start();
-        
-    }, 3);
-    
 });
