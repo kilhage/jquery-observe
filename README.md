@@ -31,3 +31,6 @@ jQuery("#id").observe(1, function (element) {
 
 
 ```
+
+[www.glooby.com](https://www.glooby.com)
+[www.glooby.se](https://www.glooby.se)
