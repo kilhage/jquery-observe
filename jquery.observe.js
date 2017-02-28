@@ -35,7 +35,8 @@
             ids.push(setInterval(function () {
                 if (value !== elem.value) {
                     value = elem.value;
-                    callback.call(elem, elem);
+                    //callback.call(elem, elem);
+                    elem.apply(callback);
                 }
             }, interval));
         });
